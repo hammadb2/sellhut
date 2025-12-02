@@ -1,129 +1,90 @@
-# Sell Hut - Real Estate Agency Website
+# Sell Hut Backend
 
-A modern, responsive real estate website for Sell Hut, a trusted real estate agency helping clients find their dream homes.
+A lightweight SaaS-style backend for automating acquisitions and dispositions workflows for real estate wholesaling. Built with Node.js, TypeScript, Express, Prisma (PostgreSQL), and Twilio/LLM stubs.
 
-## Features
+## Prerequisites
+- Node.js 18+
+- PostgreSQL database
+- Redis (optional if you swap cron for BullMQ)
 
-- **Responsive Design**: Fully responsive layout that works on desktop, tablet, and mobile devices
-- **Modern UI**: Clean, professional design with smooth animations and transitions
-- **Property Listings**: Browse through various property listings with detailed information
-- **Search Functionality**: Search properties by location, type, and price range
-- **Contact Form**: Easy-to-use contact form for inquiries
-- **Team Showcase**: Meet the expert team members
-- **Interactive Elements**: Smooth scrolling, mobile navigation, and dynamic content
-
-## Pages
-
-1. **Home (index.html)**: Landing page with hero section, featured properties, and key features
-2. **Properties (properties.html)**: Complete property listings with filters
-3. **About Us (about.html)**: Company information, mission, vision, and team members
-4. **Contact (contact.html)**: Contact form and office information
-
-## Technologies Used
-
-- **HTML5**: Semantic markup and structure
-- **CSS3**: Modern styling with Flexbox and Grid
-- **JavaScript**: Interactive features and form handling
-- **Font Awesome**: Icon library for visual elements
-- **Unsplash**: High-quality property images
-
-## File Structure
+## Environment Variables
+Create a `.env` file with:
 
 ```
-sellhut/
-├── index.html          # Homepage
-├── properties.html     # Property listings page
-├── about.html          # About us page
-├── contact.html        # Contact page
-├── css/
-│   └── style.css      # Main stylesheet
-├── js/
-│   └── script.js      # JavaScript functionality
-└── README.md          # Documentation
+DATABASE_URL=postgresql://user:password@localhost:5432/sellhut
+API_KEY=dev-key
+PORT=3000
+OPENAI_API_KEY=your-openai-key
+TWILIO_ACCOUNT_SID=...
+TWILIO_AUTH_TOKEN=...
+TWILIO_PHONE_NUMBER=+15555550123
+SMTP_HOST=smtp.example.com
+SMTP_PORT=587
+SMTP_USER=user
+SMTP_PASS=pass
 ```
 
-## Key Features Details
+Only `DATABASE_URL`, `API_KEY`, and `PORT` are required to boot. Twilio/SMTP/LLM keys enable live sending and AI text.
 
-### Navigation
-- Sticky navigation bar
-- Mobile-responsive hamburger menu
-- Active page highlighting
+## Install & Database
 
-### Property Cards
-- Image galleries with hover effects
-- Property details (beds, baths, square footage)
-- Price information
-- Property badges (For Sale/For Rent)
+```bash
+npm install
+npx prisma generate
+npx prisma migrate dev --name init --create-only # creates migration files; run without --create-only to apply
+npm run prisma:seed
+```
 
-### Search Functionality
-- Location search
-- Property type filter
-- Price range filter
+> Adjust the migrate command to point at your running Postgres instance.
 
-### Contact Form
-- Form validation
-- Email format checking
-- Success/error messages
-- Required field validation
+## Running
 
-### Responsive Design
-- Mobile-first approach
-- Breakpoints at 968px and 576px
-- Touch-friendly navigation
-- Optimized images
+```bash
+npm run dev
+```
 
-## Browser Support
+The server listens on `PORT` (default 3000). Health check at `/health`.
 
-- Chrome (latest)
-- Firefox (latest)
-- Safari (latest)
-- Edge (latest)
-- Mobile browsers (iOS Safari, Chrome Mobile)
+## API Authentication
+All endpoints (except webhooks) expect an `x-api-key` header matching `API_KEY`.
 
-## Getting Started
+## Key Endpoints
 
-1. Clone the repository
-2. Open `index.html` in your web browser
-3. No build process or dependencies required!
+### Acquisitions
+- `POST /api/acquisitions/import-propstream` (multipart `file`): import PropStream CSV.
+- `GET /api/properties?status=NEW&zip=46218&motivationScoreMin=50`: list properties with filters.
+- `POST /api/properties/:id/score`: AI ARV + motivation scoring.
+- `POST /api/leads/:id/contact` `{ sendSms?: boolean }`: generate outreach scripts and optional SMS.
 
-## Customization
+### Buyers & Dispo
+- `POST /api/buyers` / `GET /api/buyers` / `PATCH /api/buyers/:id` / `DELETE /api/buyers/:id`
+- `POST /api/deals`: create a deal and AI marketing blurb.
+- `POST /api/deals/:id/match-buyers`: create DispoMatch rows.
+- `POST /api/deals/:id/send-to-buyers` `{ via: "sms" | "email" | "both" }`: push to matched buyers.
 
-### Colors
-The color scheme can be customized in `css/style.css` using CSS variables:
-- `--primary-color`: Main brand color
-- `--secondary-color`: Accent color
-- `--accent-color`: Secondary accent color
+### Webhooks
+- `POST /api/webhooks/twilio-sms`: Twilio SMS inbound handler to classify buyer replies.
 
-### Content
-- Update property listings in the HTML files
-- Modify team member information in `about.html`
-- Change contact details in the footer and contact page
+## Example cURL
 
-### Images
-Replace image URLs with your own property photos. Currently using Unsplash placeholder images.
+```bash
+curl -X POST http://localhost:3000/api/acquisitions/import-propstream \
+  -H "x-api-key: $API_KEY" \
+  -F "file=@propstream.csv"
 
-## Future Enhancements
+curl -X POST http://localhost:3000/api/properties/{id}/score -H "x-api-key: $API_KEY"
 
-- Backend integration for dynamic property data
-- User authentication and saved favorites
-- Advanced property search with more filters
-- Property comparison feature
-- Virtual tour integration
-- Blog section for real estate tips
-- Mortgage calculator
-- Newsletter subscription
+curl -X POST http://localhost:3000/api/leads/{leadId}/contact \
+  -H "x-api-key: $API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"sendSms":true}'
 
-## License
+curl -X POST http://localhost:3000/api/deals \
+  -H "x-api-key: $API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"propertyId":"...","contractPrice":120000}'
+```
 
-This project is created for demonstration purposes.
-
-## Contact
-
-For inquiries about this website, please contact:
-- Email: info@sellhut.com
-- Phone: (555) 123-4567
-- Address: 123 Real Estate Blvd, Suite 100
-
----
-
-**Sell Hut** - Your Trusted Real Estate Partner
+## Notes
+- Nightly cron (2 AM server time) scores NEW properties via AI.
+- AI prompts and Twilio/SMTP are stubbed-friendly for local development.
