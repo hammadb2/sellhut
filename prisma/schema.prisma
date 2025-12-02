@@ -1,0 +1,153 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum PropertyStatus {
+  NEW
+  CONTACTED
+  WARM
+  HOT
+  UNDER_CONTRACT
+  DEAD
+}
+
+enum LeadStatus {
+  NEW
+  ATTEMPTED
+  QUALIFIED_WARM
+  QUALIFIED_HOT
+  NOT_INTERESTED
+  DO_NOT_CALL
+}
+
+enum CallDirection {
+  OUTBOUND
+  INBOUND
+}
+
+enum BuyerStrategy {
+  FLIP
+  BRRRR
+  RENTAL
+  WHOLESALE
+}
+
+enum RehabLevel {
+  COSMETIC
+  MEDIUM
+  HEAVY
+}
+
+enum DealStatus {
+  OPEN
+  ASSIGNED
+  CLOSED
+  CANCELED
+}
+
+model Property {
+  id               String          @id @default(cuid())
+  propstreamId     String?
+  address          String
+  city             String
+  state            String
+  zip              String
+  beds             Int?
+  baths            Float?
+  sqft             Int?
+  yearBuilt        Int?
+  ownerName        String?
+  ownerMailingAddr String?
+  ownerPhoneRaw    String?
+  equityEstimate   Float?
+  arvEstimate      Float?
+  motivationScore  Int?
+  status           PropertyStatus  @default(NEW)
+  leads            Lead[]
+  createdAt        DateTime        @default(now())
+  updatedAt        DateTime        @updatedAt
+
+  @@unique([address, ownerName], name: "address_ownerName")
+}
+
+model Lead {
+  id               String       @id @default(cuid())
+  property         Property     @relation(fields: [propertyId], references: [id])
+  propertyId       String
+  ownerName        String?
+  phone            String
+  source           String
+  lastStatus       LeadStatus   @default(NEW)
+  lastCallResult   String?
+  aiNotes          String?
+  motivationScore  Int?
+  priceExpectation Float?
+  timeline         String?
+  createdAt        DateTime     @default(now())
+  updatedAt        DateTime     @updatedAt
+  callAttempts     CallAttempt[]
+}
+
+model CallAttempt {
+  id         String        @id @default(cuid())
+  lead       Lead          @relation(fields: [leadId], references: [id])
+  leadId     String
+  when       DateTime      @default(now())
+  direction  CallDirection
+  result     String
+  transcript String?
+  aiSummary  String?
+}
+
+model Buyer {
+  id               String         @id @default(cuid())
+  name             String
+  company          String?
+  email            String?
+  phone            String?
+  city             String?
+  notes            String?
+  minPrice         Float?
+  maxPrice         Float?
+  targetZips       String[]
+  strategy         BuyerStrategy?
+  maxRehabLevel    RehabLevel?
+  aiBuyBoxSummary  String?
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
+  dispoMatches     DispoMatch[]
+
+  @@unique([email])
+}
+
+model Deal {
+  id               String        @id @default(cuid())
+  property         Property      @relation(fields: [propertyId], references: [id])
+  propertyId       String
+  contractPrice    Float
+  arv              Float?
+  estimatedRepairs Float?
+  assignmentFee    Float?
+  status           DealStatus    @default(OPEN)
+  aiSummary        String?
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
+  dispoMatches     DispoMatch[]
+}
+
+model DispoMatch {
+  id            String   @id @default(cuid())
+  deal          Deal     @relation(fields: [dealId], references: [id])
+  dealId        String
+  buyer         Buyer    @relation(fields: [buyerId], references: [id])
+  buyerId       String
+  matchScore    Int
+  sentVia       String?
+  sentAt        DateTime?
+  buyerResponse String?
+}
